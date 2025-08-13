@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using System.Collections.Generic;
 
 [DefaultExecutionOrder(-1000)]
 [DisallowMultipleComponent]
@@ -21,26 +22,76 @@ public class LIFManager : MonoBehaviour
     public NeuronType defaultType = NeuronType.Inter;
 
     [Header("Step Settings (ms)")]
-    [Tooltip("기본 스텝 간격(ms) — FixedUpdate에서 전달하지 않으면 사용")]
+    [Tooltip("스텝 간격 힌트(ms). Fixed의 실제 dt와 일치시키는 것을 권장")]
     public float stepDtMs = 1.0f;
     [Tooltip("발화 후 휴지기(ms)")]
     public float refractoryMs = 2.0f;
+    [Tooltip("Time.timeScale 무시하고 고정틱 사용")]
+    public bool useUnscaledTime = false;
 
     [Header("Execution")]
     [Tooltip("시뮬레이션 실행 여부")]
     public bool runSimulation = true;
 
-    // 내부 상태
+    // ---- Public State ----
     public LIFState State { get; private set; }
+    public int SimTick { get; private set; } // 유일한 시간 축(int tick)
 
-    // ---- Unity Lifecycle ----
+    // ---- Events (관측용 훅) ----
+    public event System.Action BeforeStep;   // 스텝 직전
+    public event System.Action AfterStep;    // 스텝 직후
+
+    // ---- Input / Weight Queues (틱 경계 스케줄) ----
+    public struct ScheduledInput { public int tick; public int neuron; public float amp; }
+    public struct ScheduledWeight { public int tick; public int edgeIndex; public float value; public bool additive; }
+
+    public class LIFInputQueue
+    {
+        readonly List<ScheduledInput> _buf = new();
+        public void Enqueue(ScheduledInput e) => _buf.Add(e);
+        public void DrainForTick(int tick, float[] pending)
+        {
+            for (int i = _buf.Count - 1; i >= 0; --i)
+            {
+                var e = _buf[i];
+                if (e.tick != tick) continue;
+                if ((uint)e.neuron < (uint)pending.Length)
+                    pending[e.neuron] += e.amp;
+                _buf.RemoveAt(i);
+            }
+        }
+    }
+    public class LIFWeightQueue
+    {
+        readonly List<ScheduledWeight> _buf = new();
+        public float clampMin = -10f, clampMax = 10f;
+        public void Enqueue(ScheduledWeight w) => _buf.Add(w);
+        public void DrainForTick(int tick, float[] synWeight)
+        {
+            for (int i = _buf.Count - 1; i >= 0; --i)
+            {
+                var e = _buf[i];
+                if (e.tick != tick) continue;
+                if ((uint)e.edgeIndex < (uint)synWeight.Length)
+                {
+                    float w = e.additive ? (synWeight[e.edgeIndex] + e.value) : e.value;
+                    synWeight[e.edgeIndex] = Mathf.Clamp(w, clampMin, clampMax);
+                }
+                _buf.RemoveAt(i);
+            }
+        }
+    }
+
+    public LIFInputQueue InputQ { get; } = new LIFInputQueue();
+    public LIFWeightQueue WeightQ { get; } = new LIFWeightQueue();
+
+    // ---- Internals ----
+    // 다음 틱에 1회 소비되는 감각 입력(래칭 버퍼)
+    public float[] pendingExternalInput;
+
     private void Awake()
     {
-        if (Instance != null && Instance != this)
-        {
-            Destroy(gameObject);
-            return;
-        }
+        if (Instance != null && Instance != this) { Destroy(gameObject); return; }
         Instance = this;
         if (dontDestroyOnLoad) DontDestroyOnLoad(gameObject);
 
@@ -50,29 +101,76 @@ public class LIFManager : MonoBehaviour
     private void Start()
     {
         ResetStateValues();
+        SimTick = 0;
     }
 
-    // ⛔️ Update 제거: 이 컴포넌트는 화면/로그 관여 안 함
+    // ⛔ Update는 시뮬 금지. 화면/HUD/로그만 다른 컴포넌트에서 처리.
 
     private void FixedUpdate()
     {
         if (!runSimulation) return;
+        SimTick++;
 
-        // 물리틱마다 1스텝: dt는 고정 틱을 그대로 사용
-        float dtMs = Time.fixedDeltaTime * 1000f;
-        StepOnce(dtMs); // 내부에서 externalInput을 클리어함
+        // ---- 스텝 직전 훅/적용 ----
+        BeforeStep?.Invoke();
+
+        // (1) 입력 스케줄 소비 → 이번 틱에만 쓸 externalInput으로 복사
+        InputQ.DrainForTick(SimTick, pendingExternalInput);
+        System.Array.Copy(pendingExternalInput, State.externalInput, neuronCount);
+        System.Array.Clear(pendingExternalInput, 0, neuronCount);
+
+        // (2) 가중치 스케줄 적용 (정책 A: 이번 틱에 즉시 반영)
+        WeightQ.DrainForTick(SimTick, State.synWeight);
+
+        // ---- 1틱 실행 ----
+        float dtMs = (useUnscaledTime ? Time.fixedUnscaledDeltaTime : Time.fixedDeltaTime) * 1000f;
+        if (dtMs <= 0f) dtMs = stepDtMs; // 안전 장치
+        LIFStepCpu.Step(State, neuronCount, dtMs, refractoryMs);
+
+        // 감각 입력은 1틱 소비 후 클리어
+        System.Array.Clear(State.externalInput, 0, neuronCount);
+
+        // ---- 스텝 직후 훅 ----
+        AfterStep?.Invoke();
     }
 
-    // ---- Public API ----
+    // ---- Public Scheduling API (외부에는 Enqueue만 공개) ----
 
-    /// 외부 감각 입력 누적 (센서리 뉴런만 의미 있음)
-    public void AddSensoryInput(int neuronIndex, float value)
+    /// <summary>다음 틱에 1회 펄스</summary>
+    public void EnqueuePulseNextTick(int neuron, float amp)
     {
-        if ((uint)neuronIndex >= (uint)neuronCount) return;
-        State.externalInput[neuronIndex] += value;
+        InputQ.Enqueue(new ScheduledInput { tick = SimTick + 1, neuron = neuron, amp = amp });
     }
 
-    /// 모터 뉴런 발화 카운트 읽기(옵션으로 초기화)
+    /// <summary>폭(ms)만큼 연속 펄스 (틱 단위로 변환)</summary>
+    public void EnqueuePulseSpanMs(int neuron, float amp, float widthMs)
+    {
+        int durTicks = Mathf.Max(1, Mathf.CeilToInt(widthMs / Mathf.Max(0.0001f, stepDtMs)));
+        int start = SimTick + 1;
+        for (int t = 0; t < durTicks; t++)
+            InputQ.Enqueue(new ScheduledInput { tick = start + t, neuron = neuron, amp = amp });
+    }
+
+    /// <summary>절대 틱 지정 펄스</summary>
+    public void EnqueueAtTick(int absTick, int neuron, float amp)
+    {
+        InputQ.Enqueue(new ScheduledInput { tick = Mathf.Max(1, absTick), neuron = neuron, amp = amp });
+    }
+
+    /// <summary>가중치 변경 스케줄(기본은 절대값 설정). additive=true면 누적</summary>
+    public void EnqueueWeightAtTick(int edgeIndex, float value, bool additive = false, int? tick = null)
+    {
+        WeightQ.Enqueue(new ScheduledWeight
+        {
+            tick = tick ?? (SimTick + 1), // 기본: 다음 틱부터 반영(안정)
+            edgeIndex = edgeIndex,
+            value = value,
+            additive = additive
+        });
+    }
+
+    // ---- 기존 편의 API (읽기/설정/할당) ----
+
     public float ReadMotorFiring(int neuronIndex, bool clearAfterRead = true)
     {
         if ((uint)neuronIndex >= (uint)neuronCount) return 0f;
@@ -91,16 +189,15 @@ public class LIFManager : MonoBehaviour
         for (int i = 0; i < neuronCount; i++) State.type[i] = t;
     }
 
-    /// 뉴런 수 변경 시 SoA 재할당
     public void Reallocate(int newNeuronCount)
     {
         if (newNeuronCount <= 0) newNeuronCount = 1;
         neuronCount = newNeuronCount;
         AllocateStateIfNeeded(neuronCount);
         ResetStateValues();
+        SimTick = 0;
     }
 
-    /// CSR 형태로 시냅스 설정
     public void SetSynapsesCompact(int[] synStartIndex, int[] synCount, int[] synPost, float[] synWeight)
     {
         if (synStartIndex == null || synCount == null || synPost == null || synWeight == null) { Debug.LogError("[LIF] SetSynapsesCompact: null 배열"); return; }
@@ -113,7 +210,6 @@ public class LIFManager : MonoBehaviour
         State.synWeight = synWeight;
     }
 
-    /// 에지 리스트에서 시냅스 압축 구성
     public void BuildSynapsesFromEdges((int pre, int post, float w)[] edges)
     {
         if (edges == null) { Debug.LogError("[LIF] BuildSynapsesFromEdges: edges == null"); return; }
@@ -151,7 +247,6 @@ public class LIFManager : MonoBehaviour
         SetSynapsesCompact(start, synCount, post, weight);
     }
 
-    /// 상태 초기화
     public void ResetStateValues()
     {
         var s = State;
@@ -167,19 +262,11 @@ public class LIFManager : MonoBehaviour
             s.externalInput[i] = 0f;
             s.motorFiring[i] = 0f;
         }
+
+        // 큐/버퍼 초기화
+        System.Array.Clear(pendingExternalInput, 0, n);
     }
 
-    /// 외부에서도 강제 스텝 가능 (테스트/배치용)
-    public void StepOnce(float? customDtMs = null)
-    {
-        float dt = customDtMs ?? stepDtMs;
-        LIFStepCpu.Step(State, neuronCount, dt, refractoryMs);
-
-        // 감각 입력은 한 스텝 후 소모
-        System.Array.Clear(State.externalInput, 0, neuronCount);
-    }
-
-    // ---- Internals ----
     private void AllocateStateIfNeeded(int n)
     {
         if (State == null) State = new LIFState();
@@ -197,5 +284,7 @@ public class LIFManager : MonoBehaviour
 
         State.externalInput = new float[n];
         State.motorFiring = new float[n];
+
+        pendingExternalInput = new float[n];
     }
 }
