@@ -128,8 +128,8 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 10392674}
-  - component: {fileID: 10392675}
   - component: {fileID: 10392676}
+  - component: {fileID: 10392675}
   m_Layer: 0
   m_Name: RootShell
   m_TagString: Untagged
@@ -161,6 +161,18 @@ MonoBehaviour:
   m_GameObject: {fileID: 10392673}
   m_Enabled: 1
   m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 00d67382f978d3a4abdbe391aab10f0b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &10392676
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 10392673}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d764a9830a4dfdd48a98d7a01e2a4b4a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
@@ -172,19 +184,6 @@ MonoBehaviour:
   stepDtMs: 1
   refractoryMs: 2
   runSimulation: 1
-  useUpdateTimer: 1
---- !u!114 &10392676
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 10392673}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 00d67382f978d3a4abdbe391aab10f0b, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!1 &519420028
 GameObject:
   m_ObjectHideFlags: 0
