@@ -142,11 +142,20 @@ public static class LIFStepCpu
     public static void Step(LIFState s, int count, float dtMs, float refractoryMs, ref LIFTickStats stats)
     {
         // --- 성능을 위한 레퍼런스 캐싱 ---
-        var pot = s.potential; var thr = s.threshold; var leak = s.leak;
-        var refc = s.refractory; var typ = s.type;
-        var start = s.synStartIndex; var scount = s.synCount;
-        var post = s.synPost; var w = s.synWeight;
-        var ext = s.externalInput; var motor = s.motorFiring;
+        var potential = s.potential; 
+        var threshold = s.threshold; 
+        var leak = s.leak;
+        var refractory = s.refractory; 
+
+        var type = s.type;
+
+        var synStartIndex = s.synStartIndex; 
+        var synCount = s.synCount;
+        var synPost = s.synPost; 
+        var synWeight = s.synWeight;
+
+        var externalInput = s.externalInput; 
+        var motorFiring = s.motorFiring;
 
         stats.Begin();                  // 계측 초기화
         float dt = dtMs * 0.001f;       // [ms] → [s]
@@ -160,58 +169,58 @@ public static class LIFStepCpu
         for (int i = 0; i < count; i++)
         {
             // [A] 불응기: 남아있으면 시간만 줄이고 스킵
-            float r = refc[i];
-            if (r > 0f)
+            float curRefractory = refractory[i];
+            if (curRefractory > 0f)
             {
-                r -= dtMs;
-                refc[i] = r > 0f ? r : 0f;
+                curRefractory -= dtMs;
+                refractory[i] = curRefractory > 0f ? curRefractory : 0f;
                 stats.RefractorySkips++;
                 continue;
             }
 
             // [B] 누수(연속형 Euler 근사) — λ 음수 입력 가드
-            float p = pot[i];
+            float curPotential = potential[i];
             float lambda = leak[i];
             if (lambda < 0f) lambda = 0f;
 
             // p(t+dt) = p + (-λ·p)*dt
-            p += (-lambda * p) * dt;
+            curPotential += (-lambda * curPotential) * dt;
 
             // [C] 외부 입력(감각 뉴런만)
-            if (typ[i] == NeuronType.Sensory)
-                p += ext[i];
+            if (type[i] == NeuronType.Sensory)
+                curPotential += externalInput[i];
 
             // [D] 임계 도달 → 스파이크
-            if (p >= thr[i])
+            if (curPotential >= threshold[i])
             {
-                pot[i] = 0f;                // 리셋
-                refc[i] = refractoryMs;     // 불응기 시작
+                potential[i] = 0f;                // 리셋
+                refractory[i] = refractoryMs;     // 불응기 시작
                 stats.Spikes++;
 
-                if (typ[i] == NeuronType.Motor)
-                    motor[i] += 1f;
+                if (type[i] == NeuronType.Motor)
+                    motorFiring[i] += 1f;
 
                 // 전도는 누적 버퍼에만 모음(동일 tick 내 재판정 금지)
-                int st = start[i], end = st + scount[i];
+                int st = synStartIndex[i], end = st + synCount[i];
                 for (int k = st; k < end; k++)
                 {
-                    accum[post[k]] += w[k];
+                    accum[synPost[k]] += synWeight[k];
                     stats.SynUpdates++;
                 }
             }
             else
             {
                 // [E] 정상 범위 저장 + NaN/Inf 가드
-                if (float.IsNaN(p) || float.IsInfinity(p))
+                if (float.IsNaN(curPotential) || float.IsInfinity(curPotential))
                 {
-                    p = 0f;
+                    curPotential = 0f;
                     stats.HadNaNOrInf = true;
                 }
-                pot[i] = p;
+                potential[i] = curPotential;
 
                 // 관측 전위 min/max 갱신
-                if (p < stats.PotMin) stats.PotMin = p;
-                if (p > stats.PotMax) stats.PotMax = p;
+                if (curPotential < stats.PotMin) stats.PotMin = curPotential;
+                if (curPotential > stats.PotMax) stats.PotMax = curPotential;
             }
         }
 
@@ -221,16 +230,16 @@ public static class LIFStepCpu
             float aj = accum[j];
             if (aj != 0f)
             {
-                float p = pot[j] + aj;
-                if (float.IsNaN(p) || float.IsInfinity(p))
+                float curPotentialInAccum = potential[j] + aj;
+                if (float.IsNaN(curPotentialInAccum) || float.IsInfinity(curPotentialInAccum))
                 {
-                    p = 0f;
+                    curPotentialInAccum = 0f;
                     stats.HadNaNOrInf = true;
                 }
-                pot[j] = p;
+                potential[j] = curPotentialInAccum;
 
-                if (p < stats.PotMin) stats.PotMin = p;
-                if (p > stats.PotMax) stats.PotMax = p;
+                if (curPotentialInAccum < stats.PotMin) stats.PotMin = curPotentialInAccum;
+                if (curPotentialInAccum > stats.PotMax) stats.PotMax = curPotentialInAccum;
             }
         }
 
