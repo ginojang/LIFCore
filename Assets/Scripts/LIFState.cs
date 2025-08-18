@@ -139,36 +139,39 @@ public static class LIFStepCpu
     /// <param name="dtMs">시간 간격(ms)</param>
     /// <param name="refractoryMs">불응기(ms)</param>
     /// <param name="stats">선택: 라이트 계측(ref). 필요 없으면 new 후 무시 가능.</param>
-    public static void Step(LIFState s, int count, float dtMs, float refractoryMs, ref LIFTickStats stats)
+    /// 
+    // LIFStepCpu.cs 내에 추가 (기존 Step는 그대로 두고 오버로드만 추가)
+    public static void StepWithFlags(
+        LIFState s, int count, float dtMs, float refractoryMs,
+        ref LIFTickStats stats, bool[] spikedThisTick  // size=N
+    )
     {
-        // --- 성능을 위한 레퍼런스 캐싱 ---
-        var potential = s.potential; 
-        var threshold = s.threshold; 
-        var leak = s.leak;
-        var refractory = s.refractory; 
+        if (spikedThisTick != null && spikedThisTick.Length >= count)
+            Array.Clear(spikedThisTick, 0, count);
 
+        // 원본 Step 코드와 동일…
+        var potential = s.potential;
+        var threshold = s.threshold;
+        var leak = s.leak;
+        var refractory = s.refractory;
         var type = s.type;
 
-        var synStartIndex = s.synStartIndex; 
+        var synStartIndex = s.synStartIndex;
         var synCount = s.synCount;
-        var synPost = s.synPost; 
+        var synPost = s.synPost;
         var synWeight = s.synWeight;
 
-        var externalInput = s.externalInput; 
+        var externalInput = s.externalInput;
         var motorFiring = s.motorFiring;
 
-        stats.Begin();                  // 계측 초기화
-        float dt = dtMs * 0.001f;       // [ms] → [s]
+        stats.Begin();
+        float dt = dtMs * 0.001f;
 
-        // ---- 전도 누적 버퍼 ----
-        // stackalloc은 미초기화 메모리이므로 반드시 Clear() 필요.
         Span<float> accum = stackalloc float[count];
         accum.Clear();
 
-        // ============ 1) 발화 판정(불응기 우선) ============
         for (int i = 0; i < count; i++)
         {
-            // [A] 불응기: 남아있으면 시간만 줄이고 스킵
             float curRefractory = refractory[i];
             if (curRefractory > 0f)
             {
@@ -178,29 +181,26 @@ public static class LIFStepCpu
                 continue;
             }
 
-            // [B] 누수(연속형 Euler 근사) — λ 음수 입력 가드
             float curPotential = potential[i];
             float lambda = leak[i];
             if (lambda < 0f) lambda = 0f;
-
-            // p(t+dt) = p + (-λ·p)*dt
             curPotential += (-lambda * curPotential) * dt;
 
-            // [C] 외부 입력(감각 뉴런만)
             if (type[i] == NeuronType.Sensory)
                 curPotential += externalInput[i];
 
-            // [D] 임계 도달 → 스파이크
             if (curPotential >= threshold[i])
             {
-                potential[i] = 0f;                // 리셋
-                refractory[i] = refractoryMs;     // 불응기 시작
+                potential[i] = 0f;
+                refractory[i] = refractoryMs;
                 stats.Spikes++;
+
+                if (spikedThisTick != null && i < spikedThisTick.Length)
+                    spikedThisTick[i] = true;
 
                 if (type[i] == NeuronType.Motor)
                     motorFiring[i] += 1f;
 
-                // 전도는 누적 버퍼에만 모음(동일 tick 내 재판정 금지)
                 int st = synStartIndex[i], end = st + synCount[i];
                 for (int k = st; k < end; k++)
                 {
@@ -210,7 +210,6 @@ public static class LIFStepCpu
             }
             else
             {
-                // [E] 정상 범위 저장 + NaN/Inf 가드
                 if (float.IsNaN(curPotential) || float.IsInfinity(curPotential))
                 {
                     curPotential = 0f;
@@ -218,34 +217,30 @@ public static class LIFStepCpu
                 }
                 potential[i] = curPotential;
 
-                // 관측 전위 min/max 갱신
                 if (curPotential < stats.PotMin) stats.PotMin = curPotential;
                 if (curPotential > stats.PotMax) stats.PotMax = curPotential;
             }
         }
 
-        // ============ 2) 전도량 일괄 가산(순서 비의존) ============
         for (int j = 0; j < count; j++)
         {
             float aj = accum[j];
             if (aj != 0f)
             {
-                float curPotentialInAccum = potential[j] + aj;
-                if (float.IsNaN(curPotentialInAccum) || float.IsInfinity(curPotentialInAccum))
+                float v = potential[j] + aj;
+                if (float.IsNaN(v) || float.IsInfinity(v))
                 {
-                    curPotentialInAccum = 0f;
+                    v = 0f;
                     stats.HadNaNOrInf = true;
                 }
-                potential[j] = curPotentialInAccum;
-
-                if (curPotentialInAccum < stats.PotMin) stats.PotMin = curPotentialInAccum;
-                if (curPotentialInAccum > stats.PotMax) stats.PotMax = curPotentialInAccum;
+                potential[j] = v;
+                if (v < stats.PotMin) stats.PotMin = v;
+                if (v > stats.PotMax) stats.PotMax = v;
             }
         }
-
-        // [정책] 외부 입력이 펄스형이라면, 호출자 측에서 여기서 Array.Clear(ext) 호출 권장.
-        // (본 함수는 정책 독립성을 위해 externalInput을 건드리지 않는다.)
     }
+
+
 }
 
 

@@ -62,8 +62,10 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Assets\Scripts\LIFState.cs" />
-    <Compile Include="Assets\Scripts\LIFManager.cs" />
-    <Compile Include="Assets\Scripts\LIFQuickDemo.cs" />
+    <Compile Include="Assets\Scripts\legacy\LIFQuickDemo.cs" />
+    <Compile Include="Assets\Scripts\legacy\LIFManager.cs" />
+    <Compile Include="Assets\Scripts\LIFQuickLoop.cs" />
+    <Compile Include="Assets\Scripts\LIFMiniHud.cs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="UnityEngine">

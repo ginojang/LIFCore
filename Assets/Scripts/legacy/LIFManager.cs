@@ -125,7 +125,8 @@ public class LIFManager : MonoBehaviour
         // ---- 1틱 실행 ----
         float dtMs = (useUnscaledTime ? Time.fixedUnscaledDeltaTime : Time.fixedDeltaTime) * 1000f;
         if (dtMs <= 0f) dtMs = stepDtMs; // 안전 장치
-        LIFStepCpu.Step(State, neuronCount, dtMs, refractoryMs);
+
+        //LIFStepCpu.Step(State, neuronCount, dtMs, refractoryMs);
 
         // 감각 입력은 1틱 소비 후 클리어
         System.Array.Clear(State.externalInput, 0, neuronCount);
