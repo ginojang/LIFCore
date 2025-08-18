@@ -64,7 +64,7 @@
     <Compile Include="Assets\Scripts\LIFState.cs" />
     <Compile Include="Assets\Scripts\legacy\LIFQuickDemo.cs" />
     <Compile Include="Assets\Scripts\legacy\LIFManager.cs" />
-    <Compile Include="Assets\Scripts\LIFQuickLoop.cs" />
+    <Compile Include="Assets\Scripts\LIFStateManager.cs" />
     <Compile Include="Assets\Scripts\LIFMiniHud.cs" />
   </ItemGroup>
   <ItemGroup>

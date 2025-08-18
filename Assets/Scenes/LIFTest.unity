@@ -128,7 +128,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 10392674}
-  - component: {fileID: 10392676}
+  - component: {fileID: 10392677}
   - component: {fileID: 10392675}
   m_Layer: 0
   m_Name: RootShell
@@ -164,7 +164,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 637bcac205bf45143b20d7d3c7b434b4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  spikedThisTick: 
   history: 256
   watchNeurons: 0000000001000000020000000300000004000000050000000600000007000000
   pixelPerCell: 2
@@ -174,7 +173,14 @@ MonoBehaviour:
   motorEmaTau: 0.4
   topLeft: {x: 10, y: 10}
   lineHeight: 18
---- !u!114 &10392676
+  enableDebugKeys: 1
+  pulseSensoryIndex: 0
+  pulseAmplitude: 1
+  pulseKey: 32
+  resetKey: 114
+  toggleHelpKey: 104
+  showHelpOverlay: 1
+--- !u!114 &10392677
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -183,12 +189,23 @@ MonoBehaviour:
   m_GameObject: {fileID: 10392673}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 70604c0f71035434fb80b21080c397f5, type: 3}
+  m_Script: {fileID: 11500000, guid: e08e8062e0c82bc439aa8c969a1af8a8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  hud: {fileID: 10392675}
+  driver: 1
+  useUnscaledTimeInCoroutine: 1
+  maxCatchUpSteps: 8
+  sensory: 1
+  inter: 2
+  motor: 1
+  defaultThreshold: 1
+  defaultLeak: 0
+  defaultSynWeight: 1.2
   dtMs: 10
   refractoryMs: 5
+  motorDecayPerSecond: 2
+  clearExternalAfterStep: 1
+  logInit: 0
 --- !u!1 &519420028
 GameObject:
   m_ObjectHideFlags: 0
