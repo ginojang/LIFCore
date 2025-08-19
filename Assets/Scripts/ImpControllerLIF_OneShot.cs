@@ -48,14 +48,18 @@ public class ImpControllerLIF_OneShot : MonoBehaviour
 
         float e = Vector3.SignedAngle(a, b, Vector3.up); // +: 왼쪽(CCW), -: 오른쪽(CW)
 
-        // 2) e → (Left, Right) 입력 (스무스 + 데드존)
+        // 2) e → (Left, Right) 입력 선택
         float L = 0f, R = 0f;
-        float absE = Mathf.Abs(e);
-        if (absE >= deadZoneDeg)
+        if (Mathf.Abs(e) >= deadZoneDeg)
         {
-            float t = Mathf.Clamp01(absE / Mathf.Max(1e-3f, angleNormDeg));
-            float mag = Mathf.SmoothStep(0f, 1f, t); // 작은 각도에서 완만하게
-            if (e > 0f) L = mag * inputGain; else R = mag * inputGain;
+            if (e < 0)
+                L = 1.0f;
+            else
+                R = 1.0f;
+        }
+        else
+        {
+            return;
         }
 
         // 3) 초소형 LIF 그래프(2S→2M) 구성
@@ -127,6 +131,7 @@ public class ImpControllerLIF_OneShot : MonoBehaviour
                   $"M_L fire={mL}, M_R fire={mR} | potL={potL:F2}, potR={potR:F2}");
 
         // 5) (옵션) 한 번만 회전 적용
+        
         if (applyOneShotRotation)
         {
             float turnSign = Mathf.Sign((mL - mR) != 0 ? (mL - mR) : (potL - potR));
@@ -134,6 +139,9 @@ public class ImpControllerLIF_OneShot : MonoBehaviour
             if (turnSign != 0f)
                 transform.Rotate(0f, angle * turnSign, 0f, Space.World);
         }
+
+        // e는 SignedAngle(forward, toPlayer, up)
+        //transform.Rotate(0f, e, 0f, Space.World);   // => 곧바로 플레이어 정면
 
         // 루프 완전 차단
         enabled = false;
