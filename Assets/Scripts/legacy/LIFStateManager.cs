@@ -1,4 +1,4 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 using System;
 using System.Collections;
 using System.Diagnostics; // Stopwatch
@@ -12,7 +12,7 @@ public sealed class LIFStateManager : MonoBehaviour
     [Header("Driver")]
     public SimDriver driver = SimDriver.Coroutine;
     public bool useUnscaledTimeInCoroutine = true;
-    public int maxCatchUpSteps = 8; // ÇÁ¸®Áî ÈÄ °úµµ ·çÇÁ ¹æÁö
+    public int maxCatchUpSteps = 8; // í”„ë¦¬ì¦ˆ í›„ ê³¼ë„ ë£¨í”„ ë°©ì§€
 
     [Header("Neuron Counts")]
     public int sensory = 1;
@@ -25,11 +25,11 @@ public sealed class LIFStateManager : MonoBehaviour
     public float defaultSynWeight = 1.2f;
 
     [Header("Simulation")]
-    [Tooltip("½Ã¹Ä·¹ÀÌ¼Ç °íÁ¤ Æ½ (ms)")]
+    [Tooltip("ì‹œë®¬ë ˆì´ì…˜ ê³ ì • í‹± (ms)")]
     public float dtMs = 10f;
-    [Tooltip("ºÒÀÀ±â(ms)")]
+    [Tooltip("ë¶ˆì‘ê¸°(ms)")]
     public float refractoryMs = 5f;
-    [Tooltip("½ºÅÜ¸¶´Ù °¨¼èµÇ´Â ¸ğÅÍ ¹ßÈ­·®/ÃÊ (EMA¿ë)")]
+    [Tooltip("ìŠ¤í…ë§ˆë‹¤ ê°ì‡ ë˜ëŠ” ëª¨í„° ë°œí™”ëŸ‰/ì´ˆ (EMAìš©)")]
     public float motorDecayPerSecond = 2.0f;
 
     [Header("Policy")]
@@ -44,10 +44,15 @@ public sealed class LIFStateManager : MonoBehaviour
     public int N => (State?.potential?.Length) ?? 0;
 
     // ---- Driver internals ----
-    private float _accumSec;              // FixedUpdate¿ë ´©Àû±â
-    private Coroutine _simCo;             // ÄÚ·çÆ¾ ÇÚµé
-    private Stopwatch _sw;                // ÄÚ·çÆ¾¿ë Å¸ÀÌ¸Ó
-    private double _nextSec;              // ´ÙÀ½ ½ºÅÜ ¿¹¾à ½Ã°£(ÃÊ)
+    private float _accumSec;              // FixedUpdateìš© ëˆ„ì ê¸°
+    private Coroutine _simCo;             // ì½”ë£¨í‹´ í•¸ë“¤
+    private Stopwatch _sw;                // ì½”ë£¨í‹´ìš© íƒ€ì´ë¨¸
+    private double _nextSec;              // ë‹¤ìŒ ìŠ¤í… ì˜ˆì•½ ì‹œê°„(ì´ˆ)
+
+
+    public event Action<LIFState, float> OnBeforeStep;
+    public event Action<LIFState, float> OnAfterStep;
+
 
     void Awake()
     {
@@ -93,7 +98,7 @@ public sealed class LIFStateManager : MonoBehaviour
     {
         if (driver != SimDriver.FixedUpdate || State == null) return;
 
-        // °íÁ¤ ¹°¸®Æ½ ±â¹İ ´©Àû °íÁ¤½ºÅÜ
+        // ê³ ì • ë¬¼ë¦¬í‹± ê¸°ë°˜ ëˆ„ì  ê³ ì •ìŠ¤í…
         float d = Time.fixedDeltaTime;
         _accumSec += d;
 
@@ -106,14 +111,14 @@ public sealed class LIFStateManager : MonoBehaviour
         }
         if (steps == maxCatchUpSteps && _accumSec >= DtSec)
         {
-            // °úµµ catch-up ¹æÁö: ´©Àû ¸®¼Â(µå¸®ÇÁÆ® ÃÖ¼ÒÈ­)
+            // ê³¼ë„ catch-up ë°©ì§€: ëˆ„ì  ë¦¬ì…‹(ë“œë¦¬í”„íŠ¸ ìµœì†Œí™”)
             _accumSec = 0f;
         }
     }
 
     IEnumerator SimLoop()
     {
-        // °íÁ¤ Æ½ ½ºÄÉÁÙ¸µ (Stopwatch ±â¹İ)
+        // ê³ ì • í‹± ìŠ¤ì¼€ì¤„ë§ (Stopwatch ê¸°ë°˜)
         while (enabled)
         {
             if (State == null) { yield return null; continue; }
@@ -130,7 +135,7 @@ public sealed class LIFStateManager : MonoBehaviour
             }
             if (steps == maxCatchUpSteps && now >= _nextSec)
             {
-                // °úµµ ÇÁ¸®Áî ÈÄ µå¸®ÇÁÆ® ¹æÁö: Áö±İ ½Ã°£À¸·Î ÀçÁ¤·Ä
+                // ê³¼ë„ í”„ë¦¬ì¦ˆ í›„ ë“œë¦¬í”„íŠ¸ ë°©ì§€: ì§€ê¸ˆ ì‹œê°„ìœ¼ë¡œ ì¬ì •ë ¬
                 _nextSec = now + DtSec;
             }
 
@@ -144,7 +149,7 @@ public sealed class LIFStateManager : MonoBehaviour
             }
             else
             {
-                // ÀÌ¹Ì ´ÊÀ½ ¡æ ´ÙÀ½ ÇÁ·¹ÀÓ±îÁö ¾çº¸
+                // ì´ë¯¸ ëŠ¦ìŒ â†’ ë‹¤ìŒ í”„ë ˆì„ê¹Œì§€ ì–‘ë³´
                 yield return null;
             }
         }
@@ -153,26 +158,37 @@ public sealed class LIFStateManager : MonoBehaviour
     public float DtSec => Mathf.Max(0.0001f, dtMs * 0.001f);
 
     // ================== Public API ==================
-
     public void StepOnce()
     {
         if (State == null) return;
+
+        // â¬‡ï¸ ì™¸ë¶€ì—ì„œ ì„¼ì„œ ì£¼ì… ë“± í•  ê¸°íšŒ
+        OnBeforeStep?.Invoke(State, dtMs);
 
         if (SpikedThisTick == null || SpikedThisTick.Length != N)
             SpikedThisTick = new bool[N];
 
         LIFStepCpu.StepWithFlags(State, N, dtMs, refractoryMs, ref Stats, SpikedThisTick);
 
+        OnAfterStep?.Invoke(State, dtMs);
+
         if (clearExternalAfterStep && State.externalInput != null)
             Array.Clear(State.externalInput, 0, State.externalInput.Length);
 
-        // ¸ğÅÍ °¨¼è: ÃÊ´ç °¨¼èÀ²À» °íÁ¤Æ½¿¡ ¸ÂÃç È¯»ê
         if (State.motorFiring != null && motorDecayPerSecond > 0f)
         {
-            float dec = motorDecayPerSecond * DtSec; // ½ºÅÜ´ç °¨¼è·®
+            float dec = motorDecayPerSecond * DtSec;
             for (int i = 0; i < State.motorFiring.Length; i++)
                 State.motorFiring[i] = Mathf.Max(0f, State.motorFiring[i] - dec);
         }
+    }
+
+    // ìƒˆ ìƒíƒœ ê°ˆì•„ë¼ìš°ê¸°(í—¬í¼)
+    public void OverrideState(LIFState newState)
+    {
+        State = newState;
+        SpikedThisTick = new bool[State.potential.Length];
+        Stats = new LIFTickStats();
     }
 
     public void PulseExternal(int neuronIndex, float amplitude)

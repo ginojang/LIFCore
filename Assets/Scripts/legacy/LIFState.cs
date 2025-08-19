@@ -141,6 +141,43 @@ public static class LIFStepCpu
     /// <param name="stats">선택: 라이트 계측(ref). 필요 없으면 new 후 무시 가능.</param>
     /// 
     // LIFStepCpu.cs 내에 추가 (기존 Step는 그대로 두고 오버로드만 추가)
+    // 1) 깃발 없는 기본 Step (편의용) ------------------------------------------
+    public static void Step(
+        LIFState s, int count, float dtMs, float refractoryMs,
+        ref LIFTickStats stats
+    )
+    {
+        // 내부적으로 기존 StepWithFlags를 사용
+        StepWithFlags(s, count, dtMs, refractoryMs, ref stats, null);
+    }
+
+
+    // 2) 원샷 2패스 래퍼 -------------------------------------------------------
+    // 1) 1패스: 센서 스파이크 → 전도 누적만(동일 tick 내 재판정 금지 규칙 유지)
+    // 2) 외부 입력(펄스형) 클리어 (옵션)
+    // 3) 2패스: 누적된 전도로 갱신된 전위로 판정(모터 스파이크 발생)
+    //    ※ 2패스에서 생긴 전도는 더 갈 곳이 없으니 그대로 두어도 OK(원샷 디버그용)
+    public static void StepTwoPassOneShot(
+        LIFState s, int count, float dtMs, float refractoryMs,
+        ref LIFTickStats stats,
+        bool clearExternalAfterFirst = true,
+        bool[] spikedFirst = null,    // 필요 없으면 null
+        bool[] spikedSecond = null     // 필요 없으면 null
+    )
+    {
+        // 1) 1패스: 입력 주입된 상태에서 전도 누적까지
+        StepWithFlags(s, count, dtMs, refractoryMs, ref stats, spikedFirst);
+
+        // 2) 외부 입력(펄스형) 클리어(옵션)
+        if (clearExternalAfterFirst && s.externalInput != null)
+            Array.Clear(s.externalInput, 0, Math.Min(count, s.externalInput.Length));
+
+        // 3) 2패스: 전도 반영된 전위로 판정(모터 스파이크가 이 패스에서 일어남)
+        StepWithFlags(s, count, dtMs, refractoryMs, ref stats, spikedSecond);
+    }
+
+
+
     public static void StepWithFlags(
         LIFState s, int count, float dtMs, float refractoryMs,
         ref LIFTickStats stats, bool[] spikedThisTick  // size=N

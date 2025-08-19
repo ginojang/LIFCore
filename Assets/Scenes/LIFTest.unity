@@ -128,8 +128,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 10392674}
-  - component: {fileID: 10392677}
-  - component: {fileID: 10392675}
   m_Layer: 0
   m_Name: RootShell
   m_TagString: Untagged
@@ -152,60 +150,61 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &10392675
+--- !u!1 &365830102
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 365830104}
+  - component: {fileID: 365830103}
+  m_Layer: 0
+  m_Name: Arena
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &365830103
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 10392673}
+  m_GameObject: {fileID: 365830102}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 637bcac205bf45143b20d7d3c7b434b4, type: 3}
+  m_Script: {fileID: 11500000, guid: c9ac0f0902777bd47bc62c5e37f08abc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  history: 256
-  watchNeurons: 0000000001000000020000000300000004000000050000000600000007000000
-  pixelPerCell: 2
-  bgColor: {r: 0.08, g: 0.08, b: 0.08, a: 1}
-  offColor: {r: 0.15, g: 0.15, b: 0.15, a: 1}
-  onColor: {r: 1, g: 1, b: 1, a: 1}
-  motorEmaTau: 0.4
-  topLeft: {x: 10, y: 10}
-  lineHeight: 18
-  enableDebugKeys: 1
-  pulseSensoryIndex: 0
-  pulseAmplitude: 1
-  pulseKey: 32
-  resetKey: 114
-  toggleHelpKey: 104
-  showHelpOverlay: 1
---- !u!114 &10392677
-MonoBehaviour:
+  arenaSize: 30
+  wallHeight: 3
+  wallThickness: 0.5
+  cameraHeight: 35
+  cameraMargin: 1
+  playerStart: {x: -5, y: 0.5, z: 0}
+  impStart: {x: 5, y: 0.5, z: 0}
+  floorColor: {r: 0.12, g: 0.12, b: 0.12, a: 1}
+  wallColor: {r: 0.3, g: 0.3, b: 0.3, a: 1}
+  playerColor: {r: 0.2, g: 0.6, b: 1, a: 1}
+  impColor: {r: 0.9, g: 0.35, b: 0.25, a: 1}
+--- !u!4 &365830104
+Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 10392673}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e08e8062e0c82bc439aa8c969a1af8a8, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  driver: 1
-  useUnscaledTimeInCoroutine: 1
-  maxCatchUpSteps: 8
-  sensory: 1
-  inter: 2
-  motor: 1
-  defaultThreshold: 1
-  defaultLeak: 0
-  defaultSynWeight: 1.2
-  dtMs: 10
-  refractoryMs: 5
-  motorDecayPerSecond: 2
-  clearExternalAfterStep: 1
-  logInit: 0
+  m_GameObject: {fileID: 365830102}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &519420028
 GameObject:
   m_ObjectHideFlags: 0
@@ -311,7 +310,7 @@ Camera:
   near clip plane: 0.3
   far clip plane: 1000
   field of view: 34
-  orthographic: 1
+  orthographic: 0
   orthographic size: 5
   m_Depth: -1
   m_CullingMask:
@@ -336,13 +335,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 519420028}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: -10}
+  m_LocalRotation: {x: 0.27315623, y: -0, z: -0, w: 0.96196973}
+  m_LocalPosition: {x: 0.1, y: 13.7, z: -19}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 31.704, y: 0, z: 0}
 --- !u!1 &619394800
 GameObject:
   m_ObjectHideFlags: 0
@@ -434,3 +433,4 @@ SceneRoots:
   - {fileID: 519420032}
   - {fileID: 619394802}
   - {fileID: 10392674}
+  - {fileID: 365830104}

@@ -61,11 +61,16 @@
     <Analyzer Include="D:\Program Files\Unity Hub\6000.1.15f1\Editor\Data\Tools\Unity.SourceGenerators\Unity.UIToolkit.SourceGenerator.dll" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Assets\Scripts\LIFState.cs" />
+    <Compile Include="Assets\Scripts\legacy\LIFMiniHud.cs" />
+    <Compile Include="Assets\Scripts\ArenaBuilder.cs" />
     <Compile Include="Assets\Scripts\legacy\LIFQuickDemo.cs" />
+    <Compile Include="Assets\Scripts\legacy\LIFImpOrientAgent.cs" />
     <Compile Include="Assets\Scripts\legacy\LIFManager.cs" />
-    <Compile Include="Assets\Scripts\LIFStateManager.cs" />
-    <Compile Include="Assets\Scripts\LIFMiniHud.cs" />
+    <Compile Include="Assets\Scripts\ImpControllerLIF_OneShot.cs" />
+    <Compile Include="Assets\Scripts\legacy\LIFState.cs" />
+    <Compile Include="Assets\Scripts\legacy\LIFStateManager.cs" />
+    <Compile Include="Assets\Scripts\legacy\LIFGraphBuilder_Orient.cs" />
+    <Compile Include="Assets\Scripts\PlayerControllerTopDown.cs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="UnityEngine">
