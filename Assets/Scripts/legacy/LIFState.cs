@@ -1,286 +1,290 @@
 ﻿using System;
 
-// ==========================================================
-// LIF Core Types
-// ==========================================================
-
-/// <summary>
-/// 뉴런의 역할 타입(메모리 절약을 위해 byte).
-/// </summary>
-public enum NeuronType : byte
+namespace Legacy
 {
-    /// <summary>외부 자극을 받아들이는 감각 뉴런</summary>
-    Sensory,
-    /// <summary>중계/가공을 담당하는 인터뉴런</summary>
-    Inter,
-    /// <summary>행동/출력을 담당하는 운동 뉴런</summary>
-    Motor,
-}
-
-// ==========================================================
-// LIFState (SoA: Struct-of-Arrays)
-//  - WebGL/IL2CPP 친화적 레이아웃
-//  - 실행 로직은 아래 LIFStepCpu.Step 이 담당
-//
-// Invariants:
-//  - 모든 1D 배열 길이는 N(뉴런 수)와 동일해야 함(단, synPost/synWeight는 시냅스 총수).
-//  - synStartIndex.Length == synCount.Length == N
-//  - 각 i에 대해 0 <= synStartIndex[i] <= synPost.Length 이며,
-//    synStartIndex[i] + synCount[i] <= synPost.Length.
-//  - type[i]에 따라 의미가 달라질 수 있음(예: externalInput은 보통 Sensory에서만 사용).
-//  - 권장 단위: 시간(ms), leak은 [1/s], potential/threshold는 동일 스케일.
-// ==========================================================
-
-/// <summary>
-/// Leaky Integrate-and-Fire 네트워크의 "현재 상태" 컨테이너.
-/// SoA 레이아웃으로 캐시 효율을 극대화했다.
-/// </summary>
-public sealed class LIFState
-{
-    #region Neuron State (size: N)
-
-    /// <summary>막전위 V(t). 외부 입력/시냅스/누수/불응기에 의해 매 tick 갱신된다.</summary>
-    public float[] potential;
-
-    /// <summary>발화 임계치 θ. potential[i] ≥ threshold[i]이면 spike 발생.</summary>
-    public float[] threshold;
-
-    /// <summary>누수율 λ [1/s]. (연속형: dv/dt = -λ·v + I)</summary>
-    public float[] leak;
-
-    /// <summary>남은 불응기(단위: ms). 0보다 크면 발화/적분을 건너뛰고 카운트다운.</summary>
-    public float[] refractory;
-
-    /// <summary>뉴런 역할 타입(Sensory/Inter/Motor). 타입별 규칙 분기 등에 사용.</summary>
-    public NeuronType[] type;
-
-    #endregion
-
-    // ---------------------------------------------------------------------
-
-    #region Synapse Graph (Compressed Adjacency / CSR-like)
-
-    /// <summary>pre 뉴런 i의 시냅스 리스트가 synPost/synWeight에서 시작하는 오프셋.</summary>
-    public int[] synStartIndex;
-
-    /// <summary>pre 뉴런 i가 갖는 시냅스 개수. 유효 범위: [start, start+count).</summary>
-    public int[] synCount;
-
-    /// <summary>k번째 시냅스의 post(도착) 뉴런 인덱스. 길이는 시냅스 총수.</summary>
-    public int[] synPost;
-
-    /// <summary>k번째 시냅스의 가중치(양수: 흥분, 음수: 억제). synPost와 동일 길이.</summary>
-    public float[] synWeight;
-
-    #endregion
-
-    // ---------------------------------------------------------------------
-
-    #region I/O Buffers (size: N)
+    // ==========================================================
+    // LIF Core Types
+    // ==========================================================
 
     /// <summary>
-    /// 외부 자극(감각 입력) 버퍼.
-    /// [정책] 펄스형이면 Step 후 호출자에서 0으로 초기화하는 패턴 권장.
+    /// 뉴런의 역할 타입(메모리 절약을 위해 byte).
     /// </summary>
-    public float[] externalInput;
+    public enum NeuronType : byte
+    {
+        /// <summary>외부 자극을 받아들이는 감각 뉴런</summary>
+        Sensory,
+        /// <summary>중계/가공을 담당하는 인터뉴런</summary>
+        Inter,
+        /// <summary>행동/출력을 담당하는 운동 뉴런</summary>
+        Motor,
+    }
+
+    // ==========================================================
+    // LIFState (SoA: Struct-of-Arrays)
+    //  - WebGL/IL2CPP 친화적 레이아웃
+    //  - 실행 로직은 아래 LIFStepCpu.Step 이 담당
+    //
+    // Invariants:
+    //  - 모든 1D 배열 길이는 N(뉴런 수)와 동일해야 함(단, synPost/synWeight는 시냅스 총수).
+    //  - synStartIndex.Length == synCount.Length == N
+    //  - 각 i에 대해 0 <= synStartIndex[i] <= synPost.Length 이며,
+    //    synStartIndex[i] + synCount[i] <= synPost.Length.
+    //  - type[i]에 따라 의미가 달라질 수 있음(예: externalInput은 보통 Sensory에서만 사용).
+    //  - 권장 단위: 시간(ms), leak은 [1/s], potential/threshold는 동일 스케일.
+    // ==========================================================
 
     /// <summary>
-    /// Motor 뉴런의 스파이크 카운터.
-    /// [정책] 바깥에서 윈도우/EMA로 발화율(Hz) 변환.
+    /// Leaky Integrate-and-Fire 네트워크의 "현재 상태" 컨테이너.
+    /// SoA 레이아웃으로 캐시 효율을 극대화했다.
     /// </summary>
-    public float[] motorFiring;
-
-    #endregion
-}
-
-// ==========================================================
-// Light Monitoring (가벼운 계측만)
-// ==========================================================
-
-/// <summary>
-/// 프레임(틱) 단위 계측 지표(라이트).
-/// HUD/로그/대시보드로 바로 보이게 최소 필드만 둔다.
-/// </summary>
-public struct LIFTickStats
-{
-    public int Spikes;           // 이번 tick 총 스파이크 수
-    public int RefractorySkips;  // 불응기 때문에 건너뛴 뉴런 수
-    public int SynUpdates;       // 전도 누적 횟수(accum += w)
-    public bool HadNaNOrInf;     // NaN/Inf 발생 여부
-    public float PotMin;         // 관측 전위 최소
-    public float PotMax;         // 관측 전위 최대
-
-    public void Begin()
+    public sealed class LIFState
     {
-        Spikes = 0;
-        RefractorySkips = 0;
-        SynUpdates = 0;
-        HadNaNOrInf = false;
-        PotMin = float.PositiveInfinity;
-        PotMax = float.NegativeInfinity;
+        #region Neuron State (size: N)
+
+        /// <summary>막전위 V(t). 외부 입력/시냅스/누수/불응기에 의해 매 tick 갱신된다.</summary>
+        public float[] potential;
+
+        /// <summary>발화 임계치 θ. potential[i] ≥ threshold[i]이면 spike 발생.</summary>
+        public float[] threshold;
+
+        /// <summary>누수율 λ [1/s]. (연속형: dv/dt = -λ·v + I)</summary>
+        public float[] leak;
+
+        /// <summary>남은 불응기(단위: ms). 0보다 크면 발화/적분을 건너뛰고 카운트다운.</summary>
+        public float[] refractory;
+
+        /// <summary>뉴런 역할 타입(Sensory/Inter/Motor). 타입별 규칙 분기 등에 사용.</summary>
+        public NeuronType[] type;
+
+        #endregion
+
+        // ---------------------------------------------------------------------
+
+        #region Synapse Graph (Compressed Adjacency / CSR-like)
+
+        /// <summary>pre 뉴런 i의 시냅스 리스트가 synPost/synWeight에서 시작하는 오프셋.</summary>
+        public int[] synStartIndex;
+
+        /// <summary>pre 뉴런 i가 갖는 시냅스 개수. 유효 범위: [start, start+count).</summary>
+        public int[] synCount;
+
+        /// 아래 두개는 총 시냅스 개수
+        /// <summary>k번째 시냅스의 post(도착) 뉴런 인덱스. 길이는 시냅스 총수.</summary>
+        public int[] synPost;
+
+        /// <summary>k번째 시냅스의 가중치(양수: 흥분, 음수: 억제). synPost와 동일 길이.</summary>
+        public float[] synWeight;
+
+        #endregion
+
+        // ---------------------------------------------------------------------
+
+        #region I/O Buffers (size: N)
+
+        /// <summary>
+        /// 외부 자극(감각 입력) 버퍼.
+        /// [정책] 펄스형이면 Step 후 호출자에서 0으로 초기화하는 패턴 권장.
+        /// </summary>
+        public float[] externalInput;
+
+        /// <summary>
+        /// Motor 뉴런의 스파이크 카운터.
+        /// [정책] 바깥에서 윈도우/EMA로 발화율(Hz) 변환.
+        /// </summary>
+        public float[] motorFiring;
+
+        #endregion
     }
-}
 
-// ==========================================================
-// LIFStepCpu - 안정형(순서 비의존) 전도만 유지
-//  - 누수: 연속형(Euler 근사) p += (-λ·p)*dt   ※ dt는 [s]
-//  - 전도: 동일 tick 내 재판정 금지(버퍼링 후 일괄 가산)
-//  - 외부 입력: 펄스 정책이면 호출자에서 clear
-//  - 안전장치: 음수 λ 가드, NaN/Inf 방지
-// ==========================================================
+    // ==========================================================
+    // Light Monitoring (가벼운 계측만)
+    // ==========================================================
 
-public static class LIFStepCpu
-{
     /// <summary>
-    /// 안정형 Step (라이트 버전, 주석 풍부).
+    /// 프레임(틱) 단위 계측 지표(라이트).
+    /// HUD/로그/대시보드로 바로 보이게 최소 필드만 둔다.
     /// </summary>
-    /// <param name="s">상태</param>
-    /// <param name="count">뉴런 수(N)</param>
-    /// <param name="dtMs">시간 간격(ms)</param>
-    /// <param name="refractoryMs">불응기(ms)</param>
-    /// <param name="stats">선택: 라이트 계측(ref). 필요 없으면 new 후 무시 가능.</param>
-    /// 
-    // LIFStepCpu.cs 내에 추가 (기존 Step는 그대로 두고 오버로드만 추가)
-    // 1) 깃발 없는 기본 Step (편의용) ------------------------------------------
-    public static void Step(
-        LIFState s, int count, float dtMs, float refractoryMs,
-        ref LIFTickStats stats
-    )
+    public struct LIFTickStats
     {
-        // 내부적으로 기존 StepWithFlags를 사용
-        StepWithFlags(s, count, dtMs, refractoryMs, ref stats, null);
-    }
+        public int Spikes;           // 이번 tick 총 스파이크 수
+        public int RefractorySkips;  // 불응기 때문에 건너뛴 뉴런 수
+        public int SynUpdates;       // 전도 누적 횟수(accum += w)
+        public bool HadNaNOrInf;     // NaN/Inf 발생 여부
+        public float PotMin;         // 관측 전위 최소
+        public float PotMax;         // 관측 전위 최대
 
-
-    // 2) 원샷 2패스 래퍼 -------------------------------------------------------
-    // 1) 1패스: 센서 스파이크 → 전도 누적만(동일 tick 내 재판정 금지 규칙 유지)
-    // 2) 외부 입력(펄스형) 클리어 (옵션)
-    // 3) 2패스: 누적된 전도로 갱신된 전위로 판정(모터 스파이크 발생)
-    //    ※ 2패스에서 생긴 전도는 더 갈 곳이 없으니 그대로 두어도 OK(원샷 디버그용)
-    public static void StepTwoPassOneShot(
-        LIFState s, int count, float dtMs, float refractoryMs,
-        ref LIFTickStats stats,
-        bool clearExternalAfterFirst = true,
-        bool[] spikedFirst = null,    // 필요 없으면 null
-        bool[] spikedSecond = null     // 필요 없으면 null
-    )
-    {
-        // 1) 1패스: 입력 주입된 상태에서 전도 누적까지
-        StepWithFlags(s, count, dtMs, refractoryMs, ref stats, spikedFirst);
-
-        // 2) 외부 입력(펄스형) 클리어(옵션)
-        if (clearExternalAfterFirst && s.externalInput != null)
-            Array.Clear(s.externalInput, 0, Math.Min(count, s.externalInput.Length));
-
-        // 3) 2패스: 전도 반영된 전위로 판정(모터 스파이크가 이 패스에서 일어남)
-        StepWithFlags(s, count, dtMs, refractoryMs, ref stats, spikedSecond);
-    }
-
-
-
-    public static void StepWithFlags(
-        LIFState s, int count, float dtMs, float refractoryMs,
-        ref LIFTickStats stats, bool[] spikedThisTick  // size=N
-    )
-    {
-        if (spikedThisTick != null && spikedThisTick.Length >= count)
-            Array.Clear(spikedThisTick, 0, count);
-
-        // 원본 Step 코드와 동일…
-        var potential = s.potential;
-        var threshold = s.threshold;
-        var leak = s.leak;
-        var refractory = s.refractory;
-        var type = s.type;
-
-        var synStartIndex = s.synStartIndex;
-        var synCount = s.synCount;
-        var synPost = s.synPost;
-        var synWeight = s.synWeight;
-
-        var externalInput = s.externalInput;
-        var motorFiring = s.motorFiring;
-
-        stats.Begin();
-        float dt = dtMs * 0.001f;
-
-        Span<float> accum = stackalloc float[count];
-        accum.Clear();
-
-        for (int i = 0; i < count; i++)
+        public void Begin()
         {
-            float curRefractory = refractory[i];
-            if (curRefractory > 0f)
-            {
-                curRefractory -= dtMs;
-                refractory[i] = curRefractory > 0f ? curRefractory : 0f;
-                stats.RefractorySkips++;
-                continue;
-            }
-
-            float curPotential = potential[i];
-            float lambda = leak[i];
-            if (lambda < 0f) lambda = 0f;
-            curPotential += (-lambda * curPotential) * dt;
-
-            if (type[i] == NeuronType.Sensory)
-                curPotential += externalInput[i];
-
-            if (curPotential >= threshold[i])
-            {
-                potential[i] = 0f;
-                refractory[i] = refractoryMs;
-                stats.Spikes++;
-
-                if (spikedThisTick != null && i < spikedThisTick.Length)
-                    spikedThisTick[i] = true;
-
-                if (type[i] == NeuronType.Motor)
-                    motorFiring[i] += 1f;
-
-                int st = synStartIndex[i], end = st + synCount[i];
-                for (int k = st; k < end; k++)
-                {
-                    accum[synPost[k]] += synWeight[k];
-                    stats.SynUpdates++;
-                }
-            }
-            else
-            {
-                if (float.IsNaN(curPotential) || float.IsInfinity(curPotential))
-                {
-                    curPotential = 0f;
-                    stats.HadNaNOrInf = true;
-                }
-                potential[i] = curPotential;
-
-                if (curPotential < stats.PotMin) stats.PotMin = curPotential;
-                if (curPotential > stats.PotMax) stats.PotMax = curPotential;
-            }
-        }
-
-        for (int j = 0; j < count; j++)
-        {
-            float aj = accum[j];
-            if (aj != 0f)
-            {
-                float v = potential[j] + aj;
-                if (float.IsNaN(v) || float.IsInfinity(v))
-                {
-                    v = 0f;
-                    stats.HadNaNOrInf = true;
-                }
-                potential[j] = v;
-                if (v < stats.PotMin) stats.PotMin = v;
-                if (v > stats.PotMax) stats.PotMax = v;
-            }
+            Spikes = 0;
+            RefractorySkips = 0;
+            SynUpdates = 0;
+            HadNaNOrInf = false;
+            PotMin = float.PositiveInfinity;
+            PotMax = float.NegativeInfinity;
         }
     }
 
+    // ==========================================================
+    // LIFStepCpu - 안정형(순서 비의존) 전도만 유지
+    //  - 누수: 연속형(Euler 근사) p += (-λ·p)*dt   ※ dt는 [s]
+    //  - 전도: 동일 tick 내 재판정 금지(버퍼링 후 일괄 가산)
+    //  - 외부 입력: 펄스 정책이면 호출자에서 clear
+    //  - 안전장치: 음수 λ 가드, NaN/Inf 방지
+    // ==========================================================
+
+    public static class LIFStepCpu
+    {
+        /// <summary>
+        /// 안정형 Step (라이트 버전, 주석 풍부).
+        /// </summary>
+        /// <param name="s">상태</param>
+        /// <param name="count">뉴런 수(N)</param>
+        /// <param name="dtMs">시간 간격(ms)</param>
+        /// <param name="refractoryMs">불응기(ms)</param>
+        /// <param name="stats">선택: 라이트 계측(ref). 필요 없으면 new 후 무시 가능.</param>
+        /// 
+        // LIFStepCpu.cs 내에 추가 (기존 Step는 그대로 두고 오버로드만 추가)
+        // 1) 깃발 없는 기본 Step (편의용) ------------------------------------------
+        public static void Step(
+            LIFState s, int count, float dtMs, float refractoryMs,
+            ref LIFTickStats stats
+        )
+        {
+            // 내부적으로 기존 StepWithFlags를 사용
+            StepWithFlags(s, count, dtMs, refractoryMs, ref stats, null);
+        }
+
+
+        // 2) 원샷 2패스 래퍼 -------------------------------------------------------
+        // 1) 1패스: 센서 스파이크 → 전도 누적만(동일 tick 내 재판정 금지 규칙 유지)
+        // 2) 외부 입력(펄스형) 클리어 (옵션)
+        // 3) 2패스: 누적된 전도로 갱신된 전위로 판정(모터 스파이크 발생)
+        //    ※ 2패스에서 생긴 전도는 더 갈 곳이 없으니 그대로 두어도 OK(원샷 디버그용)
+        public static void StepTwoPassOneShot(
+            LIFState s, int count, float dtMs, float refractoryMs,
+            ref LIFTickStats stats,
+            bool clearExternalAfterFirst = true,
+            bool[] spikedFirst = null,    // 필요 없으면 null
+            bool[] spikedSecond = null     // 필요 없으면 null
+        )
+        {
+            // 1) 1패스: 입력 주입된 상태에서 전도 누적까지
+            StepWithFlags(s, count, dtMs, refractoryMs, ref stats, spikedFirst);
+
+            // 2) 외부 입력(펄스형) 클리어(옵션)
+            if (clearExternalAfterFirst && s.externalInput != null)
+                Array.Clear(s.externalInput, 0, Math.Min(count, s.externalInput.Length));
+
+            // 3) 2패스: 전도 반영된 전위로 판정(모터 스파이크가 이 패스에서 일어남)
+            StepWithFlags(s, count, dtMs, refractoryMs, ref stats, spikedSecond);
+        }
+
+
+
+        public static void StepWithFlags(
+            LIFState s, int count, float dtMs, float refractoryMs,
+            ref LIFTickStats stats, bool[] spikedThisTick  // size=N
+        )
+        {
+            if (spikedThisTick != null && spikedThisTick.Length >= count)
+                Array.Clear(spikedThisTick, 0, count);
+
+            // 원본 Step 코드와 동일…
+            var potential = s.potential;
+            var threshold = s.threshold;
+            var leak = s.leak;
+            var refractory = s.refractory;
+            var type = s.type;
+
+            var synStartIndex = s.synStartIndex;
+            var synCount = s.synCount;
+            var synPost = s.synPost;
+            var synWeight = s.synWeight;
+
+            var externalInput = s.externalInput;
+            var motorFiring = s.motorFiring;
+
+            stats.Begin();
+            float dt = dtMs * 0.001f;
+
+            Span<float> accum = stackalloc float[count];
+            accum.Clear();
+
+            for (int i = 0; i < count; i++)
+            {
+
+                float curRefractory = refractory[i];
+                if (curRefractory > 0f)
+                {
+                    curRefractory -= dtMs;
+                    refractory[i] = curRefractory > 0f ? curRefractory : 0f;
+                    stats.RefractorySkips++;
+                    continue;
+                }
+
+                float curPotential = potential[i];
+                float lambda = leak[i];
+                if (lambda < 0f) lambda = 0f;
+                curPotential += (-lambda * curPotential) * dt;
+
+                if (type[i] == NeuronType.Sensory)
+                    curPotential += externalInput[i];
+
+                if (curPotential >= threshold[i])
+                {
+                    potential[i] = 0f;
+                    refractory[i] = refractoryMs;
+                    stats.Spikes++;
+
+                    if (spikedThisTick != null && i < spikedThisTick.Length)
+                        spikedThisTick[i] = true;
+
+                    if (type[i] == NeuronType.Motor)
+                        motorFiring[i] += 1f;
+
+                    int st = synStartIndex[i], end = st + synCount[i];
+                    for (int k = st; k < end; k++)
+                    {
+                        accum[synPost[k]] += synWeight[k];
+                        stats.SynUpdates++;
+                    }
+                }
+                else
+                {
+                    if (float.IsNaN(curPotential) || float.IsInfinity(curPotential))
+                    {
+                        curPotential = 0f;
+                        stats.HadNaNOrInf = true;
+                    }
+                    potential[i] = curPotential;
+
+                    if (curPotential < stats.PotMin) stats.PotMin = curPotential;
+                    if (curPotential > stats.PotMax) stats.PotMax = curPotential;
+                }
+            }
+
+            for (int j = 0; j < count; j++)
+            {
+                float aj = accum[j];
+                if (aj != 0f)
+                {
+                    float v = potential[j] + aj;
+                    if (float.IsNaN(v) || float.IsInfinity(v))
+                    {
+                        v = 0f;
+                        stats.HadNaNOrInf = true;
+                    }
+                    potential[j] = v;
+                    if (v < stats.PotMin) stats.PotMin = v;
+                    if (v > stats.PotMax) stats.PotMax = v;
+                }
+            }
+        }
+
+
+    }
 
 }
-
-
 
 /*
  
