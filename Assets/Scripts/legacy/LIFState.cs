@@ -23,6 +23,7 @@ namespace Legacy
     // LIFState (SoA: Struct-of-Arrays)
     //  - WebGL/IL2CPP 친화적 레이아웃
     //  - 실행 로직은 아래 LIFStepCpu.Step 이 담당
+
     //
     // Invariants:
     //  - 모든 1D 배열 길이는 N(뉴런 수)와 동일해야 함(단, synPost/synWeight는 시냅스 총수).

@@ -70,6 +70,7 @@
     <Compile Include="Assets\Scripts\legacy\LIFState.cs" />
     <Compile Include="Assets\Scripts\legacy\LIFStateManager.cs" />
     <Compile Include="Assets\Scripts\legacy\LIFGraphBuilder_Orient.cs" />
+    <Compile Include="Assets\Scripts\LIF\LIF.cs" />
     <Compile Include="Assets\Scripts\PlayerControllerTopDown.cs" />
   </ItemGroup>
   <ItemGroup>
