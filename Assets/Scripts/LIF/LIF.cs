@@ -192,6 +192,7 @@ namespace Neuro.LIF
             stats.Begin();
             float dt = dtMs * 0.001f;
 
+            // 아래 값들은 배열 참조 이기 때문에. ref 참조임.
             var V = st.Potential;
             var Rm = st.RefractoryMs;
             var X = st.ExternalInput;
